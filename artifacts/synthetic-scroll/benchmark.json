@@ -1,0 +1,38 @@
+{
+  "kind": "synthetic_vision_only",
+  "frames": 180,
+  "resolution": [
+    320,
+    180
+  ],
+  "scroll": true,
+  "processing_p50_ms": 2.826,
+  "processing_p95_ms": 3.287,
+  "player_detected_fraction": 0.9889,
+  "player_x_mean_absolute_error_px": 0.0,
+  "track_ids_created": 1,
+  "machine": {
+    "os": "Linux-6.18.55-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "cpu_name": "",
+    "physical_cores": 5,
+    "logical_cores": 5,
+    "ram_gib": 5.81,
+    "available_ram_gib": 4.51,
+    "opencv": "4.13.0",
+    "numpy": "2.3.5",
+    "git_found": true,
+    "llama_server_found": false,
+    "typesafe_key_present": false,
+    "gpu": null,
+    "not_a_gameplay_validation": true
+  },
+  "excludes": [
+    "screen_capture",
+    "real_game",
+    "input_injection",
+    "Jev API",
+    "VLM inference"
+  ],
+  "warning": "Not the user PC. No inference about FPS on RX 580. Synthetic actors have fixed appearances."
+}

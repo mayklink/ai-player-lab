@@ -1,0 +1,51 @@
+{
+  "kind": "replay",
+  "counters": {
+    "frames": 75,
+    "player_missing": 1,
+    "accepted": 74,
+    "player_unknown": 1
+  },
+  "metrics": {
+    "capture_resize_ms": {
+      "p50": 0.509,
+      "p95": 0.749
+    },
+    "vision_ms": {
+      "p50": 2.806,
+      "p95": 3.813
+    },
+    "loop_work_ms": {
+      "p50": 3.47,
+      "p95": 4.947
+    }
+  },
+  "memory": {
+    "events": 0,
+    "reviewed_events": 0
+  },
+  "machine": {
+    "os": "Linux-6.18.55-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "cpu_name": "",
+    "physical_cores": 5,
+    "logical_cores": 5,
+    "ram_gib": 5.81,
+    "available_ram_gib": 4.57,
+    "opencv": "4.13.0",
+    "numpy": "2.3.5",
+    "git_found": true,
+    "model_execution": "remote_api",
+    "vlm_key_present": false,
+    "vlm_url_env_present": false,
+    "vlm_model_env_present": false,
+    "typesafe_key_present": false,
+    "gpu": null,
+    "not_a_gameplay_validation": true
+  },
+  "output": "runs/synthetic-replay/20261024-180010-546649",
+  "jev_calls": 0,
+  "vlm_calls": 0,
+  "real_input_enabled": false,
+  "input_starts_disarmed": true
+}

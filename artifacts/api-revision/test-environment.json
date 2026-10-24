@@ -1,0 +1,19 @@
+{
+  "os": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "python": "3.13.5",
+  "cpu_name": "",
+  "physical_cores": 5,
+  "logical_cores": 5,
+  "ram_gib": 5.81,
+  "available_ram_gib": 4.57,
+  "opencv": "4.13.0",
+  "numpy": "2.3.5",
+  "git_found": true,
+  "model_execution": "remote_api",
+  "vlm_key_present": false,
+  "vlm_url_env_present": false,
+  "vlm_model_env_present": false,
+  "typesafe_key_present": false,
+  "gpu": null,
+  "not_a_gameplay_validation": true
+}
