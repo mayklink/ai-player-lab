@@ -4,13 +4,14 @@ from datetime import datetime
 from pathlib import Path
 from queue import SimpleQueue, Empty
 import json
+import math
 import re
 import time
 import cv2
 import numpy as np
 from .types import Decision
 from .perception import VisualPipeline, SeededPlayer
-from .sources import load_upstream_capture, resize_frame, UpstreamDeathDetector
+from .sources import load_upstream_capture, resize_frame, UpstreamDeathDetector, decode_player_template
 from .memory import MemoryStore, EpisodeBuffer
 from .providers import JevPolicy, MultimodalReviewer, local_policy, choose_action
 from .workers import LatestWorker
@@ -39,6 +40,8 @@ def validate_config(cfg: dict) -> None:
 def run_session(config_path: Path, *, seconds: float = 120, jev: bool = False, vlm: bool = False,
                 enable_input: bool = False, video_path: Path | None = None, headless: bool = False) -> dict:
     cfg=json.loads(config_path.read_text(encoding='utf-8')); validate_config(cfg)
+    # Reject legacy/malformed seeds before creating clients, workers or a controller.
+    player_template = decode_player_template(cfg)
     if seconds <= 0: raise ValueError('seconds precisa ser positivo')
     if enable_input and video_path: raise ValueError('Replay nunca injeta teclas')
     if enable_input and headless: raise ValueError('Controle real exige visualização e hotkeys')
@@ -82,6 +85,8 @@ def run_session(config_path: Path, *, seconds: float = 120, jev: bool = False, v
             ok,frame=video.read()
             return frame if ok else None
         fps=video.get(cv2.CAP_PROP_FPS) or float(cfg.get('target_fps',30))
+        if not math.isfinite(fps) or fps <= 0:
+            fps=float(cfg.get('target_fps',30))
     else:
         capture=load_upstream_capture(upstream,tuple(cfg['capture_region']))
         def get_frame(): return capture.get_frame()
@@ -95,15 +100,18 @@ def run_session(config_path: Path, *, seconds: float = 120, jev: bool = False, v
     print('Modo observação. F6 remarca jogador; F8 marca morte; F9 arma (opt-in); F10 desarma; Esc encerra.')
     try:
         while time.monotonic()-start < seconds:
-            loop_start=time.monotonic(); raw=get_frame()
+            loop_start=time.monotonic(); captured_at=loop_start; raw=get_frame()
             if raw is None: break
             frame=resize_frame(raw,int(cfg.get('work_width',320)))
-            captured_at=time.monotonic()
-            timings['capture_resize_ms'].append((captured_at-loop_start)*1000)
+            timings['capture_resize_ms'].append((time.monotonic()-loop_start)*1000)
             if pipeline is None:
+                decode_player_template(cfg, frame)
                 pipeline=VisualPipeline(frame,tuple(cfg['player_box']) if cfg.get('player_box') else None,
-                                        cfg.get('floor_y'),cfg.get('hud_px',0),episode)
-            t=time.monotonic(); obs=pipeline.process(frame,captured_at)
+                                        cfg.get('floor_y'),cfg.get('hud_px',0),episode,
+                                        player_template=player_template)
+            # Video kinematics use source time; decision expiry still uses real capture time.
+            t=time.monotonic()
+            obs=pipeline.process(frame,counters['frames']/fps,captured_at=captured_at) if video_path else pipeline.process(frame,captured_at)
             timings['vision_ms'].append((time.monotonic()-t)*1000)
             counters['frames']+=1; counters['player_missing']+=int(obs.player is None)
             response=memory_worker.poll()

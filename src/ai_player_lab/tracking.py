@@ -12,10 +12,13 @@ class MultiTracker:
         self.next_id = 1
         self.max_distance = max_distance
         self.max_missed = max_missed
+        self.elapsed: dict[int, float] = {}
 
     def update(self, detections: list[BBox], dt: float) -> list[Track]:
         dt = max(dt, 1e-3)
         ids = list(self.tracks)
+        for tid in ids:
+            self.elapsed[tid] += dt
         used: set[int] = set()
         matched: set[int] = set()
         if ids and detections:
@@ -23,7 +26,7 @@ class MultiTracker:
             for i, tid in enumerate(ids):
                 t = self.tracks[tid]
                 cx, cy = center(t.bbox)
-                horizon = dt * (t.missed+1)
+                horizon = self.elapsed[tid]
                 px, py = cx+t.vx*horizon, cy+t.vy*horizon
                 for j, box in enumerate(detections):
                     bx, by = center(box)
@@ -37,11 +40,12 @@ class MultiTracker:
                     continue
                 tid = ids[int(i)]; t = self.tracks[tid]; box = detections[int(j)]
                 old_x, old_y = center(t.bbox); new_x, new_y = center(box)
-                elapsed = dt*(t.missed+1)
+                elapsed = self.elapsed[tid]
                 t.vx = 0.4*t.vx + 0.6*(new_x-old_x)/elapsed
                 t.vy = 0.4*t.vy + 0.6*(new_y-old_y)/elapsed
                 t.bbox = tuple(float(v) for v in box)
                 t.age += 1; t.missed = 0; t.confidence = min(0.9, 0.4+0.05*t.age)
+                self.elapsed[tid] = 0.0
                 used.add(int(j)); matched.add(tid)
         for tid in ids:
             if tid not in matched:
@@ -49,11 +53,23 @@ class MultiTracker:
                 self.tracks[tid].confidence *= 0.7
                 if self.tracks[tid].missed > self.max_missed:
                     del self.tracks[tid]
+                    del self.elapsed[tid]
         for j, box in enumerate(detections):
             if j not in used:
                 self.tracks[self.next_id] = Track(self.next_id, tuple(float(v) for v in box), confidence=0.4)
+                self.elapsed[self.next_id] = 0.0
                 self.next_id += 1
-        return [Track(**t.to_dict()) for t in self.tracks.values() if t.missed == 0]
+        result = []
+        for tid, t in self.tracks.items():
+            if t.missed == 0:
+                result.append(Track(**t.to_dict()))
+            elif self.elapsed[tid] <= .2:
+                predicted = Track(**t.to_dict())
+                x,y,w,h = t.bbox
+                predicted.bbox = (x+t.vx*self.elapsed[tid], y+t.vy*self.elapsed[tid], w, h)
+                predicted.label = 'predicted_motion'
+                result.append(predicted)
+        return result
 
 
 def collision_estimate(player: Track, obj: Track) -> dict | None:

@@ -1,9 +1,12 @@
 from __future__ import annotations
 import importlib.util
+import base64
+import binascii
 import sys
 from pathlib import Path
 import cv2
 import numpy as np
+from .types import BBox
 
 UPSTREAM_COMMIT = 'ca697eb9e681a6db657ecc395bb38731960e01f8'
 
@@ -42,6 +45,54 @@ def resize_frame(frame: np.ndarray, width: int) -> np.ndarray:
     return cv2.resize(frame,(width,height),interpolation=cv2.INTER_AREA)
 
 
+def encode_player_template(frame: np.ndarray, box: BBox) -> dict:
+    """Persist only the manually selected appearance, not a new crop on startup."""
+    from .perception import SeededPlayer
+    anchor = SeededPlayer(frame, box).anchor
+    ok, png = cv2.imencode('.png', anchor)
+    if not ok:
+        raise ValueError('Falha ao guardar template da calibração')
+    return {'version':1, 'frame_size':[frame.shape[1], frame.shape[0]],
+            'bbox':list(map(int, box)), 'png_base64':base64.b64encode(png).decode('ascii')}
+
+
+def decode_player_template(cfg: dict, frame: np.ndarray | None = None) -> np.ndarray | None:
+    if cfg.get('player_box') is None:
+        return None
+    record = cfg.get('player_template')
+    if not isinstance(record, dict):
+        raise ValueError('Configuração antiga sem aparência do jogador; execute calibrate novamente')
+    try:
+        size, box = record['frame_size'], record['bbox']
+        if (record['version'] != 1 or not isinstance(size, list) or len(size) != 2
+                or any(type(x) is not int or x <= 0 for x in size)
+                or box != cfg['player_box'] or len(box) != 4
+                or any(type(x) is not int for x in box)):
+            raise ValueError('Metadados do template inválidos; execute calibrate novamente')
+        x,y,w,h = box
+        if min(x,y) < 0 or min(w,h) < 4 or x+w > size[0] or y+h > size[1]:
+            raise ValueError('Caixa do template fora da calibração')
+        if size[0] != int(cfg.get('work_width', size[0])):
+            raise ValueError('Resolução de trabalho mudou; execute calibrate novamente')
+        if frame is not None and size != [frame.shape[1],frame.shape[0]]:
+            raise ValueError('Tamanho do frame difere da calibração; execute calibrate novamente')
+        encoded = record['png_base64']
+        if not isinstance(encoded, str) or len(encoded) > 1_000_000:
+            raise ValueError('Template de calibração inválido ou excessivo')
+        raw = base64.b64decode(encoded, validate=True)
+        if not raw.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise ValueError('Template da calibração precisa ser PNG')
+        # Check PNG dimensions before decoding, avoiding unexpected allocations.
+        if len(raw) < 24 or (int.from_bytes(raw[16:20],'big'), int.from_bytes(raw[20:24],'big')) != (w,h):
+            raise ValueError('Tamanho do PNG incompatível com a calibração')
+        anchor = cv2.imdecode(np.frombuffer(raw,np.uint8),cv2.IMREAD_GRAYSCALE)
+        if anchor is None or anchor.shape != (h,w) or float(anchor.std()) < 5:
+            raise ValueError('Template inválido ou sem textura; execute calibrate novamente')
+        return anchor
+    except (KeyError, TypeError, binascii.Error, cv2.error) as exc:
+        raise ValueError('Template corrompido; execute calibrate novamente') from exc
+
+
 def calibrate(config_path: Path, width: int = 320) -> dict:
     import json
     from mss import mss
@@ -63,6 +114,7 @@ def calibrate(config_path: Path, width: int = 320) -> dict:
               'max_jev_calls':120,'jev_hz':3,'max_decision_age_ms':250,
               'vlm_base_url':'','vlm_model':'','max_vlm_calls':12,'vlm_timeout_s':30,
               'review_interval_s':10,'death_templates':{}}
+    result['player_template'] = encode_player_template(game, player)
     config_path.parent.mkdir(parents=True,exist_ok=True)
     config_path.write_text(json.dumps(result,indent=2),encoding='utf-8')
     return result

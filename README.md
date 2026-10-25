@@ -4,6 +4,8 @@
 
 Preparado para Mayk em 24/10/2026. Primeiro alvo de avaliação: Super Mario World em navegador/emulador, somente pela imagem. **Ainda não foi validado em uma partida real.** Não inclui ROM, jogo, pesos de modelos ou credenciais.
 
+**Correção local de visão (25/10/2026, não publicada):** configurações antigas com apenas `player_box` precisam de nova calibração. A aparência selecionada agora é guardada como PNG no JSON; nunca é reaprendida silenciosamente do fundo ao iniciar. Consulte `docs/REVISAO_VISAO.md` para mudanças, regressões e limites. Esta revisão não autoriza nem valida controle real.
+
 ## O que foi entregue
 
 Código Python executável, integração com componentes do Pixel-to-Action, percepção OpenCV em CPU, rastreamento de candidatos móveis, identificação inicial manual do jogador, velocidade relativa e aproximação, hash exato e similaridade visual, buffer de eventos, SQLite, workers sem fila crescente, cliente Jev, cliente multimodal remoto, controlador de teclado com trava, replay, diagnóstico de hardware, benchmark sintético, testes e requisitos de aceitação.
@@ -46,6 +48,8 @@ Abra o jogo em tamanho fixo, deixe o personagem parado numa tela jogável e rode
 
 Na calibração, selecione **somente a área do jogo**, confirme e depois selecione o personagem inteiro, incluindo pequena margem. A seleção gera `configs/local.json`. As coordenadas do personagem usam a imagem de trabalho redimensionada, não pixels do monitor.
 
+O JSON inclui um pequeno recorte do jogador; trate-o como dado privado. Mudança de resolução exige recalibrar. Não edite só `player_box`: caixa, template e tamanho de trabalho precisam corresponder. Se o personagem já se moveu muito antes de iniciar a sessão, a busca local pode não encontrá-lo; use F6, em vez de aceitar o fundo como personagem.
+
 Mantenha o jogo visível e não cubra sua região com a janela de visualização. A captura é da tela, não de uma aba oculta. O código não acessa memória do emulador nem estado interno do jogo.
 
 **O programa não pressiona teclas neste modo.** Ele apenas registra o que enxerga e a ação proposta por uma política local básica. `floor_y` permanece `null`: a heurística de chão horizontal só é ativada ao definir explicitamente a linha do piso na imagem de trabalho. Ela não é um detector universal de buracos.
@@ -60,7 +64,7 @@ Atalhos globais, quando `pynput` estiver disponível:
 | F10 | Desarma e solta as teclas |
 | Esc | Encerra a sessão |
 
-Sem hotkeys, `q` fecha a visualização, `d` marca evento e `r` permite remarcar na janela do protótipo. **Depois de morrer/reaparecer, use F6.** Reaquisição automática robusta após morte ainda não está pronta.
+Sem hotkeys, `q` fecha a visualização, `d` marca evento e `r` permite remarcar na janela do protótipo. **Depois de morrer/reaparecer, de uma transição ou perda maior que 1,5 s, use F6.** Perdas curtas exigem duas observações consistentes para reaquisição local. Aparência original e espelhada são aceitas; isso não cobre todas as poses, transformações ou escalas. Dois candidatos muito semelhantes são rejeitados como ambíguos.
 
 ## Acrescentar Jev
 
@@ -121,7 +125,7 @@ Edite `window_title` e `keys` em `configs/local.json` para corresponderem ao tí
 
 Começa **desarmado**. Coloque o jogo em foco e pressione F9. Há lista fechada de ações, watchdog, expiração e soltura ao perder foco. F10 e Esc interrompem. Controle real neste protótipo é implementado para Windows; não foi executado no ambiente de construção. Não use em partidas competitivas, sistemas anti-cheat ou jogos que não autorizem automação.
 
-Não há controlador universal de saltos: o reflexo local atual é um **veto conservador de avanço diante de uma borda candidata**, além das travas de validade. Ajustar trajetória de pulo, duração por estado e física precisa de avaliação do jogo.
+Não há controlador universal de saltos: o reflexo local é um **veto conservador diante de borda candidata ou contato visual iminente**, além das travas de validade. Objetos continuam desconhecidos, não inimigos confirmados. O veto considera direção e permite retirada horizontal; esperar não garante evitar colisão. Ajustar trajetória de pulo, duração por estado e física precisa de avaliação do jogo.
 
 ## Replay e saídas
 
@@ -130,6 +134,13 @@ Não há controlador universal de saltos: o reflexo local atual é um **veto con
 ```
 
 Replay não pode injetar teclas. Ajuste a calibração ao vídeo. A opção `--jev`/`--vlm`, quando explicitamente fornecida, continua fazendo inferências reais.
+
+Velocidades do replay usam índice/FPS do vídeo, separadamente do relógio real de expiração de decisões. Isso cobre vídeo de FPS constante; vídeo com FPS variável ainda requer timestamps por frame. Configurações históricas em `artifacts/` não contêm template persistido e não são migradas silenciosamente. Para gerar um replay sintético compatível, sem API:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\make_synthetic_replay.py --out runs\synthetic-replay
+.\.venv\Scripts\python.exe -m ai_player_lab replay runs\synthetic-replay\input.avi --config runs\synthetic-replay\config.json --headless
+```
 
 Saídas em `runs/<game_id>/`: memória SQLite persistente e sessões separadas com `state.jsonl` e `session.json`. A memória usa as últimas 100 entradas revisadas para busca, com até 12 candidatos verificados geometricamente. Isso limita custo de consulta; não garante reencontro de episódios mais antigos. Logs e evidências contêm somente a região selecionada, mas ainda podem ter dados privados: não publique `runs/`.
 

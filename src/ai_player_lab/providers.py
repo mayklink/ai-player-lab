@@ -155,12 +155,36 @@ class MultimodalReviewer:
     def close(self) -> None: self.client.close()
 
 
+def collision_veto(obs: Observation, action: str) -> bool:
+    """Conservative short-horizon stop, not an enemy classifier or jump planner."""
+    if obs.player is None or action == 'wait':
+        return False
+    px,_,pw,_ = obs.player.bbox
+    for hazard in obs.hazards:
+        if hazard.get('confidence', 0) < .3:
+            continue
+        overlap = hazard['kind'] == 'visual_overlap'
+        if not overlap and (hazard['kind'] != 'approaching_object' or hazard.get('ttc_ms', float('inf')) > 350):
+            continue
+        obj = next((o for o in obs.objects if o.id == hazard.get('object_id')), None)
+        if obj is None:
+            continue
+        ox,_,ow,_ = obj.bbox
+        # Do not veto a retreat based on the previous velocity's TTC.
+        if overlap and (action == 'jump' or abs((ox+ow/2)-(px+pw/2)) < 2):
+            return True
+        if ('right' in action and ox+ow/2 >= px+pw/2) or ('left' in action and ox+ow/2 <= px+pw/2):
+            return True
+    return False
+
+
 def local_policy(obs: Observation) -> Decision:
     # Baseline for comparison only. Unknown moving objects are NOT assumed hostile.
     action = "wait"
     if obs.player is not None and obs.player.confidence >= 0.75:
         gap = next((h for h in obs.hazards if h['kind']=='gap_candidate' and h['distance_px']<22),None)
         action = "right_jump" if gap else "right"
+        if collision_veto(obs, action): action = 'wait'
     return Decision(action,obs.captured_at,obs.seq,0.8,"local_baseline",100,obs.episode)
 
 
@@ -174,6 +198,7 @@ def choose_action(obs: Observation, candidate: Decision | None, now: float,
     age = (now-candidate.observed_at)*1000
     if age < 0 or age > max_age_ms: return wait,"stale_decision"
     if candidate.confidence < min_confidence: return wait,"low_confidence"
+    if collision_veto(obs, candidate.action): return wait,"local_collision_veto"
     # Local reflex is a conservative veto. It does not pretend to know jump physics.
     if candidate.action == "right" and any(h['kind']=='gap_candidate' and h['distance_px']<12 for h in obs.hazards):
         return wait,"local_gap_veto"

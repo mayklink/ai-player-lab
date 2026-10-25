@@ -1,5 +1,9 @@
 # Validação da revisão 0.1.1 · APIs remotas
 
+## Correção local de visão — 25/10/2026, não publicada
+
+Após a revisão abaixo, foram adicionadas 18 regressões e executados **87 testes com sucesso**, além de replay sintético de 75 frames sem API/teclado e benchmarks de 180 frames. Migração obrigatória de calibração, resultados, limites e riscos remanescentes estão em `REVISAO_VISAO.md`. Os artefatos históricos abaixo não representam a nova execução. Nenhuma partida real foi validada.
+
 ## Executado nesta revisão
 
 **69 testes automatizados passaram** no ambiente isolado, Python 3.13.5, OpenCV 4.13.0, NumPy 2.3.5. O relatório está em `artifacts/api-revision/test-results.xml`. Os 51 testes anteriores também foram reexecutados com sucesso antes da alteração.

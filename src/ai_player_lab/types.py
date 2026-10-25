@@ -48,6 +48,7 @@ class Observation:
     hazards: list[dict[str, Any]] = field(default_factory=list)
     hypotheses: list[dict[str, Any]] = field(default_factory=list)
     episode: int = 0
+    media_time: float | None = None  # replay/kinematic clock, never used as decision TTL
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
