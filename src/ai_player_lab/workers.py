@@ -19,8 +19,10 @@ class LatestWorker:
     O item em execução não é cancelado; consumidores precisam verificar TTL.
     Uma exceção é devolvida como erro, sem encerrar o loop de captura.
     """
-    def __init__(self, function: Callable, name: str) -> None:
+    def __init__(self, function: Callable, name: str, on_close: Callable | None = None) -> None:
         self.function = function
+        self.on_close = on_close
+        self.close_error: str | None = None
         self.pending: Queue = Queue(maxsize=1)
         self.results: Queue = Queue(maxsize=1)
         self.stop_event = Event()
@@ -50,23 +52,36 @@ class LatestWorker:
         except Empty: return None
 
     def _run(self) -> None:
-        while not self.stop_event.is_set():
-            try: item = self.pending.get(timeout=0.05)
-            except Empty: continue
-            self.busy.set(); start = time.monotonic()
-            try:
-                result = WorkResult(self.function(item), None, (time.monotonic()-start)*1000)
-            except Exception as exc:
-                # Do not leak provider response bodies or credentials into logs.
-                result = WorkResult(None, type(exc).__name__, (time.monotonic()-start)*1000)
-            self.busy.clear()
-            try: self.results.put_nowait(result)
-            except Full:
-                try: self.results.get_nowait()
-                except Empty: pass
+        try:
+            while not self.stop_event.is_set():
+                try: item = self.pending.get(timeout=0.05)
+                except Empty: continue
+                with self.submission_lock:
+                    if self.stop_event.is_set(): break
+                    self.busy.set()
+                start = time.monotonic()
+                try:
+                    result = WorkResult(self.function(item), None, (time.monotonic()-start)*1000)
+                except Exception as exc:
+                    # Do not leak provider response bodies or credentials into logs.
+                    result = WorkResult(None, type(exc).__name__, (time.monotonic()-start)*1000)
+                finally:
+                    self.busy.clear()
                 try: self.results.put_nowait(result)
-                except Full: pass
+                except Full:
+                    try: self.results.get_nowait()
+                    except Empty: pass
+                    try: self.results.put_nowait(result)
+                    except Full: pass
+        finally:
+            if self.on_close:
+                try: self.on_close()
+                except Exception as exc: self.close_error = type(exc).__name__
 
     def close(self) -> None:
-        self.stop_event.set()
+        with self.submission_lock:
+            self.stop_event.set()
+            while True:
+                try: self.pending.get_nowait()
+                except Empty: break
         self.thread.join(timeout=0.2)

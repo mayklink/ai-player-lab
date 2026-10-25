@@ -4,7 +4,7 @@
 
 Preparado para Mayk em 24/10/2026. Primeiro alvo de avaliação: Super Mario World em navegador/emulador, somente pela imagem. **Ainda não foi validado em uma partida real.** Não inclui ROM, jogo, pesos de modelos ou credenciais.
 
-**Correção local de visão (25/10/2026, não publicada):** configurações antigas com apenas `player_box` precisam de nova calibração. A aparência selecionada agora é guardada como PNG no JSON; nunca é reaprendida silenciosamente do fundo ao iniciar. Consulte `docs/REVISAO_VISAO.md` para mudanças, regressões e limites. Esta revisão não autoriza nem valida controle real.
+**Correção de visão (25/10/2026, PR #1 em draft):** configurações antigas com apenas `player_box` precisam de nova calibração. A aparência selecionada agora é guardada como PNG no JSON; nunca é reaprendida silenciosamente do fundo ao iniciar. Consulte `docs/REVISAO_VISAO.md` para mudanças, regressões e limites, e `docs/TESTE_WINDOWS_AMANHA.md` para o teste observacional no PC. Esta revisão não valida controle real.
 
 ## O que foi entregue
 
@@ -118,6 +118,8 @@ Esse comando tem teto próprio por execução e respeita o menor valor entre `--
 ## Controle real: somente depois da inspeção visual
 
 Edite `window_title` e `keys` em `configs/local.json` para corresponderem ao título da janela e aos controles reais do jogo. Evite títulos genéricos como “Chrome”, que podem coincidir com outras abas.
+
+O mapeamento agora aceita apenas três teclas distintas: letras, números, setas ou `space`. Modificadores e teclas de atalhos do sistema (como Alt/F4/Ctrl) são rejeitados. F10/Esc/morte/remarcação prevalecem sobre F9 quando chegam no mesmo lote; um controlador fechado/fatal não pode ser rearmado sem iniciar outra sessão.
 
 ```powershell
 .\.venv\Scripts\python.exe -m ai_player_lab observe --jev --vlm --enable-input --seconds 60

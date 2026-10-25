@@ -4,6 +4,7 @@ import platform
 import time
 from threading import Thread, Event, Lock
 from typing import Callable
+import string
 from .types import Decision
 
 
@@ -37,13 +38,19 @@ class SafeKeyboard:
                  keyboard=None, focus: Callable[[],str] | None = None,
                  clock: Callable[[],float] = time.monotonic) -> None:
         if not window_title.strip(): raise ValueError("Título exato/parcial do jogo é obrigatório")
+        self.keys = keys if keys is not None else {"left":"left","right":"right","jump":"space"}
+        safe_names = {'left','right','up','down','space'}
+        if (not isinstance(self.keys,dict) or set(self.keys) != {'left','right','jump'} or
+                any(not isinstance(k,str) or (k not in safe_names and
+                    (len(k) != 1 or k not in string.ascii_letters+string.digits))
+                    for k in self.keys.values()) or len(set(self.keys.values())) != 3):
+            raise ValueError('Controles precisam de três teclas distintas: letras, números, setas ou space; modificadores/atalhos do SO não são permitidos')
         if keyboard is None:
             if platform.system() != 'Windows': raise RuntimeError("Controle real homologável apenas no Windows neste protótipo")
             from pynput.keyboard import Controller
             keyboard = Controller()
         self.keyboard = keyboard; self.focus = focus or windows_foreground_title
         self.window_title = window_title.casefold(); self.clock = clock
-        self.keys = keys or {"left":"left","right":"right","jump":"space"}
         self.held: set = set(); self.armed = False; self.deadline = 0.0
         self.lock = Lock(); self.stop = Event()
         self.thread = Thread(target=self._watchdog,daemon=True,name="input-watchdog"); self.thread.start()
@@ -58,13 +65,22 @@ class SafeKeyboard:
 
     def arm(self) -> bool:
         with self.lock:
+            if self.stop.is_set(): return False
+            self.armed = False
+            self._release()
             self.armed = self._focused()
             return self.armed
 
     def _release(self) -> None:
+        first_error = None
         for key in tuple(self.held):
-            try: self.keyboard.release(self._resolve(key))
-            finally: self.held.discard(key)
+            try:
+                self.keyboard.release(self._resolve(key))
+                self.held.discard(key)
+            except Exception as exc:
+                # Keep failed releases tracked for watchdog/close retry, but try every key.
+                if first_error is None: first_error = exc
+        if first_error is not None: raise first_error
 
     def disarm(self) -> None:
         with self.lock:
@@ -72,16 +88,25 @@ class SafeKeyboard:
 
     def apply(self, decision: Decision) -> None:
         with self.lock:
-            if not self.armed or not self._focused():
-                self.armed = False; self._release(); return
-            parts = [] if decision.action == 'wait' else decision.action.split('_')
-            desired = {self.keys[p] for p in parts}
-            for key in self.held-desired:
-                self.keyboard.release(self._resolve(key))
-            for key in desired-self.held:
-                self.keyboard.press(self._resolve(key))
-            self.held = desired
-            self.deadline = self.clock()+decision.hold_ms/1000
+            try:
+                if self.stop.is_set() or not self.armed or not self._focused():
+                    self.armed = False; self._release(); return
+                parts = [] if decision.action == 'wait' else decision.action.split('_')
+                desired = {self.keys[p] for p in parts}
+                for key in self.held-desired:
+                    self.keyboard.release(self._resolve(key))
+                    self.held.discard(key)
+                for key in desired-self.held:
+                    # A backend can inject a key and THEN raise. Track the attempt first.
+                    self.held.add(key)
+                    self.keyboard.press(self._resolve(key))
+                self.deadline = self.clock()+decision.hold_ms/1000
+            except BaseException:
+                self.armed = False
+                self.deadline = 0.0
+                try: self._release()
+                except Exception: pass  # failed releases remain tracked for retry
+                raise
 
     def tick(self) -> None:
         with self.lock:
@@ -98,6 +123,8 @@ class SafeKeyboard:
                 self.armed = False
                 try:
                     with self.lock: self._release()
+                except Exception:
+                    pass  # close() can retry; never forget unsuccessfully released keys
                 finally: self.stop.set()
 
     def close(self) -> None:

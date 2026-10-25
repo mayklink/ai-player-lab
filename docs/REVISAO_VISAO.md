@@ -1,6 +1,11 @@
-# Correção local de visão — 25/10/2026 (não publicada)
+# Correção de visão — 25/10/2026 (PR #1 draft)
 
-Base: `main@9d6534a72bdccc32ca6db29bb46a00ed055cc04a`. A branch foi conferida antes da implementação; não havia mudanças posteriores. Trabalho local em snapshot obtido pelo conector autenticado, sem clone/histórico, push ou PR.
+Base: `main@9d6534a72bdccc32ca6db29bb46a00ed055cc04a`. A branch foi conferida antes da implementação; não havia mudanças posteriores. Trabalho em snapshot obtido pelo conector autenticado, sem clone/histórico. Após autorização, foi publicado em branch separada e [PR #1 draft](https://github.com/mayklink/ai-player-lab/pull/1), sem alterar main, merge ou deploy.
+
+## Revisão noturna posterior à publicação inicial
+**120 testes passaram** depois dos casos adversariais adicionais. Foram corrigidos limpeza parcial de teclas, rearmar controlador fechado, atalhos de SO, prioridade F9/F10, cleanup de setup e shutdown de worker/provider. Na visão, reaquisição correndo e retorno da predição para medição agora mantêm continuidade de movimento/câmera; HUD inválido falha claramente. Logs medem idade do frame/decisão, além do custo de cada estágio. Roteiro: `TESTE_WINDOWS_AMANHA.md`.
+
+Esses testes continuam inteiramente offline/fakes. Testes Windows e comportamento físico do teclado permanecem pendentes. Os resultados abaixo descrevem a correção inicial de 87 testes; não devem ser confundidos com homologação real.
 
 ## O que mudou
 - **Calibração:** a seleção humana salva um PNG cinza dentro de `player_template`, junto com bbox e tamanho do frame. Inicialização nunca recorta outra aparência na caixa antiga. Metadados, dimensões, textura e PNG são validados. Config com apenas bbox falha antes de clientes/workers; execute `calibrate` novamente.
@@ -43,7 +48,7 @@ Esses comandos não fazem chamadas aos modelos sem flags explícitas. Não use o
 - Buraco continua sendo hipótese de uma linha de piso manual; `floor_y=null` desativa essa heurística.
 - Replay corrigido assume FPS constante; VFR precisa de PTS por frame. Buffer/revisão e TTL continuam no relógio real.
 - Jev continua a 3 Hz e TTL padrão de 250 ms, podendo pausar entre decisões; limites e comportamento pós-orçamento não foram redesenhados.
-- Questões preexistentes fora deste núcleo permanecem: recursos de setup podem não fechar se vídeo/upstream/hotkeys falharem antes do loop; falha parcial de injeção pode deixar tecla não registrada como pressionada. **Não habilitar controle real com base apenas nesta revisão.** Teclado real nunca foi acionado.
+- A revisão noturna corrigiu os caminhos de setup e limpeza parcial identificados, mas uma falha permanente do backend/OS não permite garantir liberação física. **Não habilitar controle real com base apenas nesta revisão.** Teclado real nunca foi acionado.
 - Não houve captura Windows, partida real, API real, instalação PowerShell, validação de GPU/PC nem demonstração de redução de mortes.
 
 Próxima validação recomendada: vídeo real anotado, com observação apenas, cobrindo corrida, viradas, saltos, scroll, oclusão e morte/respawn. A entrega é uma correção local testada em laboratório, não homologação do jogador.

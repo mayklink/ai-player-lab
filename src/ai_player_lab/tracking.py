@@ -13,12 +13,18 @@ class MultiTracker:
         self.max_distance = max_distance
         self.max_missed = max_missed
         self.elapsed: dict[int, float] = {}
+        self.camera_shift: dict[int, np.ndarray] = {}
+        self.relative_velocity: dict[int, np.ndarray] = {}
+        self.camera_velocity = np.zeros(2, dtype=float)
 
-    def update(self, detections: list[BBox], dt: float) -> list[Track]:
+    def update(self, detections: list[BBox], dt: float, camera: dict | None = None) -> list[Track]:
         dt = max(dt, 1e-3)
+        shift = np.array([camera.get('dx',0),camera.get('dy',0)], dtype=float) if camera else np.zeros(2)
+        self.camera_velocity = .4*self.camera_velocity+.6*shift/dt
         ids = list(self.tracks)
         for tid in ids:
             self.elapsed[tid] += dt
+            self.camera_shift[tid] += shift
         used: set[int] = set()
         matched: set[int] = set()
         if ids and detections:
@@ -27,7 +33,7 @@ class MultiTracker:
                 t = self.tracks[tid]
                 cx, cy = center(t.bbox)
                 horizon = self.elapsed[tid]
-                px, py = cx+t.vx*horizon, cy+t.vy*horizon
+                px, py = np.array([cx,cy])+self.relative_velocity[tid]*horizon+self.camera_shift[tid]
                 for j, box in enumerate(detections):
                     bx, by = center(box)
                     distance = math.hypot(px-bx, py-by)
@@ -41,11 +47,12 @@ class MultiTracker:
                 tid = ids[int(i)]; t = self.tracks[tid]; box = detections[int(j)]
                 old_x, old_y = center(t.bbox); new_x, new_y = center(box)
                 elapsed = self.elapsed[tid]
-                t.vx = 0.4*t.vx + 0.6*(new_x-old_x)/elapsed
-                t.vy = 0.4*t.vy + 0.6*(new_y-old_y)/elapsed
+                self.relative_velocity[tid] = .4*self.relative_velocity[tid]+.6*(np.array([new_x-old_x,new_y-old_y])-self.camera_shift[tid])/elapsed
+                t.vx, t.vy = map(float,self.relative_velocity[tid]+self.camera_velocity)
                 t.bbox = tuple(float(v) for v in box)
                 t.age += 1; t.missed = 0; t.confidence = min(0.9, 0.4+0.05*t.age)
                 self.elapsed[tid] = 0.0
+                self.camera_shift[tid][:] = 0
                 used.add(int(j)); matched.add(tid)
         for tid in ids:
             if tid not in matched:
@@ -54,10 +61,14 @@ class MultiTracker:
                 if self.tracks[tid].missed > self.max_missed:
                     del self.tracks[tid]
                     del self.elapsed[tid]
+                    del self.camera_shift[tid]
+                    del self.relative_velocity[tid]
         for j, box in enumerate(detections):
             if j not in used:
                 self.tracks[self.next_id] = Track(self.next_id, tuple(float(v) for v in box), confidence=0.4)
                 self.elapsed[self.next_id] = 0.0
+                self.camera_shift[self.next_id] = np.zeros(2,dtype=float)
+                self.relative_velocity[self.next_id] = np.zeros(2,dtype=float)
                 self.next_id += 1
         result = []
         for tid, t in self.tracks.items():
@@ -66,7 +77,10 @@ class MultiTracker:
             elif self.elapsed[tid] <= .2:
                 predicted = Track(**t.to_dict())
                 x,y,w,h = t.bbox
-                predicted.bbox = (x+t.vx*self.elapsed[tid], y+t.vy*self.elapsed[tid], w, h)
+                position = np.array([x,y])+self.relative_velocity[tid]*self.elapsed[tid]+self.camera_shift[tid]
+                predicted.bbox = (float(position[0]),float(position[1]),w,h)
+                velocity = self.relative_velocity[tid]+self.camera_velocity
+                predicted.vx, predicted.vy = map(float,velocity)
                 predicted.label = 'predicted_motion'
                 result.append(predicted)
         return result

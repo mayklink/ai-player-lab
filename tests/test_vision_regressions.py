@@ -158,7 +158,9 @@ def test_seed_velocity_accumulates_time_including_reacquisition_confirmation():
     seed.update(np.zeros(frame.shape[:2], np.uint8), 1., CAMERA)
     shifted = cv2.warpAffine(frame, np.float32([[1,0,20],[0,1,0]]), (320,180), borderMode=cv2.BORDER_REPLICATE)
     gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
-    assert seed.update(gray, .1, {'dx':20., 'dy':0., 'valid':True}) is None
+    # Treat this as actor displacement, not camera displacement: screen velocities
+    # now use the same camera EMA in both measured and predicted tracks.
+    assert seed.update(gray, .1, CAMERA) is None
     track = seed.update(gray, .1, CAMERA)
     assert track is not None and track.vx == pytest.approx(.6*20/1.2)
 
@@ -211,3 +213,65 @@ def test_runtime_replay_uses_media_clock_even_when_decode_is_slow(tmp_path, monk
     assert len(rows) == 10 and rows[-1]['observation']['player']['vx'] == pytest.approx(30., abs=.02)
     assert summary['jev_calls'] == summary['vlm_calls'] == 0
     assert summary['real_input_enabled'] is False
+    assert summary['metrics']['frame_age_at_action_ms']['p50'] >= 45
+    for row in rows:
+        timing=row['timing']
+        assert timing['capture_begin']<=timing['capture_end']<=timing['resize_end']<=timing['vision_end']<=timing['action_dispatch_begin']<=timing['action_dispatch_end']
+        assert row['observation']['captured_at']==timing['capture_begin']
+
+
+def test_moving_player_recovers_after_short_occlusion_with_velocity_continuity():
+    frame,box=fixture_frame(0); sprite=frame[122:144,40:54].copy()
+    background=np.random.default_rng(23).integers(20,65,frame.shape,dtype=np.uint8)
+    first=background.copy();first[122:144,20:34]=sprite
+    seed=SeededPlayer(first,(20,122,14,22))
+    for i in range(1,10):
+        current=background.copy();x=20+6*i;current[122:144,x:x+14]=sprite
+        assert seed.update(cv2.cvtColor(current,cv2.COLOR_BGR2GRAY),1/30,CAMERA) is not None
+    assert seed.track.vx == pytest.approx(180,abs=.1)
+    seed.update(np.zeros(frame.shape[:2],np.uint8),1/30,CAMERA)
+    for i in range(10,14):
+        current=background.copy();x=20+6*i;current[122:144,x:x+14]=sprite
+        track=seed.update(cv2.cvtColor(current,cv2.COLOR_BGR2GRAY),1/30,CAMERA)
+        if i==10: assert track is None  # confirmation still required
+        else: assert track is not None and track.bbox[0]==x
+
+
+def test_predicted_object_moves_with_camera_without_double_compensation(monkeypatch):
+    from ai_player_lab import perception
+    frame,_=fixture_frame(0);sprite=frame[122:144,40:54].copy()
+    background=np.random.default_rng(23).integers(20,65,frame.shape,dtype=np.uint8)
+    first=background.copy();first[122:144,80:94]=sprite;first[127:144,130:144]=(170,200,170)
+    pipe=VisualPipeline(first,(80,122,14,22));pipe.last_time=0.
+    pipe.tracker.update([(130.,127.,14.,17.)],1/30)
+    pipe.tracker.tracks[1].age=5;pipe.tracker.tracks[1].confidence=.9
+    current=cv2.warpAffine(first,np.float32([[1,0,20],[0,1,0]]),(320,180),borderMode=cv2.BORDER_REPLICATE)
+    monkeypatch.setattr(perception,'estimate_camera',lambda *args:{'dx':20.,'dy':0.,'valid':True,'inliers':100})
+    obs=pipe.process(current,1/30)
+    predicted=obs.objects[0]
+    assert predicted.label=='predicted_motion' and predicted.bbox[0]==pytest.approx(150.)
+    assert predicted.vx==pytest.approx(obs.player.vx)
+    assert not obs.hazards
+
+
+@pytest.mark.parametrize('hud', [-1, 180, 500, 1.2, True])
+def test_pipeline_rejects_hud_outside_working_frame(hud):
+    with pytest.raises(ValueError,match='hud_px'):
+        VisualPipeline(fixture_frame(0)[0],hud_px=hud)
+
+
+def test_camera_stop_after_object_occlusion_preserves_common_velocity_filter():
+    from ai_player_lab.tracking import collision_estimate
+    frame,_=fixture_frame(0);sprite=frame[122:144,40:54].copy()
+    background=np.random.default_rng(23).integers(20,65,frame.shape,dtype=np.uint8)
+    first=background.copy();first[122:144,80:94]=sprite
+    player=SeededPlayer(first,(80,122,14,22));objects=MultiTracker()
+    objects.update([(98,122,14,22)],1/30)
+    objects.tracks[1].age=5;objects.tracks[1].confidence=.9
+    current=cv2.warpAffine(first,np.float32([[1,0,-20],[0,1,0]]),(320,180),borderMode=cv2.BORDER_REPLICATE)
+    for shift,visible in [(-20,False),(0,True),(0,True)]:
+        camera={'dx':float(shift),'dy':0.,'valid':True}
+        p=player.update(cv2.cvtColor(current,cv2.COLOR_BGR2GRAY),1/30,camera)
+        track=objects.update([(78,122,14,22)] if visible else [],1/30,camera=camera)[0]
+        assert p is not None and track.vx==pytest.approx(p.vx)
+        assert collision_estimate(p,track) is None

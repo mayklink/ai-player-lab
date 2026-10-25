@@ -1,6 +1,15 @@
 # Alterações
 
-## Não publicado — correção local de visão, 25/10/2026
+## PR #1 draft — revisão noturna, 25/10/2026
+
+- Press/release parcial é rastreado para limpeza; teclas cuja liberação falhou não são esquecidas. Controlador fechado/fatal não rearma e atalhos de SO não são aceitos como controles.
+- F10/Esc/morte/remarcação prevalecem antes do envio de ação; TTL é rechecado depois do detector de eventos.
+- Cleanup incremental cobre falhas de setup. Shutdown descarta jobs pendentes e fecha o provider após terminar trabalho já em voo.
+- Reaquisição correndo usa continuidade de movimento; observações/predições compartilham compensação e filtro de câmera. HUD inválido é rejeitado.
+- Logs incluem idade do frame/decisão e timestamps por estágio; roteiro Windows e pesquisa orientam observação real antes de modelos/teclado.
+- 120 testes locais passaram; nenhuma API paga, jogo ou teclado real foi usado. A versão segue em draft, sem merge/deploy.
+
+## Correção inicial de visão, 25/10/2026
 
 - Calibração persiste aparência PNG e valida dimensões; configurações legadas exigem recalibrar.
 - Template original/espelhado, rejeição de ambiguidade e reaquisição curta com confirmação; perda longa/transição exige F6.

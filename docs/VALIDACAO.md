@@ -1,6 +1,10 @@
 # Validação da revisão 0.1.1 · APIs remotas
 
-## Correção local de visão — 25/10/2026, não publicada
+## Revisão noturna — 25/10/2026, PR #1 draft
+
+**120 testes locais passaram** após a publicação inicial e novos ensaios de falha/recovery, incluindo fakes de teclado, shutdown e câmera/oclusão. Replay sintético continuou sem chamadas de API e sem input. Consulte `REVISAO_VISAO.md` e `TESTE_WINDOWS_AMANHA.md`. Não houve teste físico no Windows.
+
+## Correção inicial de visão — 25/10/2026
 
 Após a revisão abaixo, foram adicionadas 18 regressões e executados **87 testes com sucesso**, além de replay sintético de 75 frames sem API/teclado e benchmarks de 180 frames. Migração obrigatória de calibração, resultados, limites e riscos remanescentes estão em `REVISAO_VISAO.md`. Os artefatos históricos abaixo não representam a nova execução. Nenhuma partida real foi validada.
 

@@ -49,7 +49,10 @@ class SeededPlayer:
         self.missing = 0
         self.elapsed = 0.0
         self.camera_offset = np.zeros(2, dtype=float)
+        self.relative_velocity = np.zeros(2, dtype=float)
+        self.camera_velocity = np.zeros(2, dtype=float)
         self.pending: BBox | None = None
+        self.pending_velocity = np.zeros(2, dtype=float)
         self.requires_reseed = False
 
     def _lost(self) -> None:
@@ -59,6 +62,7 @@ class SeededPlayer:
 
     def update(self, gray: np.ndarray, dt: float, camera: dict) -> Track | None:
         t = self.track; x,y,w,h = t.bbox
+        self.camera_velocity = .4*self.camera_velocity+.6*np.array([camera['dx'],camera['dy']])/max(dt,1e-3)
         self.elapsed += max(dt, 1e-3)
         self.camera_offset += (camera['dx'], camera['dy'])
         # Recovery is bounded in time and space; a long loss needs a human reseed.
@@ -66,7 +70,7 @@ class SeededPlayer:
             self.requires_reseed = True
             return None
         radius = 24 + min(self.missing,4)*5
-        px,py = x+self.camera_offset[0], y+self.camera_offset[1]
+        px,py = np.array([x,y])+self.camera_offset+self.relative_velocity*self.elapsed
         x1,y1 = max(0,int(px)-radius), max(0,int(py)-radius)
         x2,y2 = min(gray.shape[1],int(px+w)+radius), min(gray.shape[0],int(py+h)+radius)
         if x2-x1 < w or y2-y1 < h:
@@ -88,14 +92,17 @@ class SeededPlayer:
             return self._lost()
         if self.missing:
             expected = None if self.pending is None else (
-                self.pending[0]+camera['dx'], self.pending[1]+camera['dy'], w, h)
+                self.pending[0]+camera['dx']+self.pending_velocity[0]*dt,
+                self.pending[1]+camera['dy']+self.pending_velocity[1]*dt, w, h)
             if expected is None or iou(expected, box) < .5:
                 self.pending = box
+                self.pending_velocity = np.clip((np.array(box[:2])-np.array(t.bbox[:2])-self.camera_offset)/self.elapsed,-400,400)
                 return None
         old = center(t.bbox); new = center(box)
         elapsed = max(self.elapsed,1e-3)
-        self.track = Track(0, box, 0.4*t.vx+0.6*(new[0]-old[0])/elapsed,
-                           0.4*t.vy+0.6*(new[1]-old[1])/elapsed,
+        self.relative_velocity = .4*self.relative_velocity+.6*(np.array(new)-np.array(old)-self.camera_offset)/elapsed
+        screen_velocity = self.relative_velocity+self.camera_velocity
+        self.track = Track(0, box, float(screen_velocity[0]), float(screen_velocity[1]),
                            min(.95,float(score)), t.age+1, 0, "player_seeded")
         self.missing = 0
         self.elapsed = 0.0
@@ -144,6 +151,8 @@ class VisualPipeline:
                  floor_y: int | None = None, hud_px: int = 0, episode: int = 0,
                  player_template: np.ndarray | None = None) -> None:
         self.previous = cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
+        if type(hud_px) is not int or not 0 <= hud_px < first_frame.shape[0]:
+            raise ValueError('hud_px deve ser inteiro entre 0 e altura do frame menos 1')
         self.player_tracker = SeededPlayer(first_frame, player_box, template=player_template) if player_box is not None else None
         self.tracker = MultiTracker()
         self.floor_y = floor_y
@@ -204,7 +213,7 @@ class VisualPipeline:
                 boxes.append(box)
         # Large residual changes indicate transitions, not dozens of new enemies.
         transition = float(np.count_nonzero(mask))/mask.size > 0.3
-        objects = self.tracker.update([] if transition else boxes, dt)
+        objects = self.tracker.update([] if transition else boxes, dt, camera=camera)
         hazards = floor_gaps(gray,player,self.floor_y)
         if player:
             for obj in objects:
