@@ -1,0 +1,31 @@
+{
+  "game_id": "mario-world-v1",
+  "capture_region": [
+    0,
+    0,
+    640,
+    360
+  ],
+  "work_width": 320,
+  "player_box": null,
+  "floor_y": null,
+  "hud_px": 0,
+  "target_fps": 30,
+  "window_title": "",
+  "keys": {
+    "left": "left",
+    "right": "right",
+    "jump": "space"
+  },
+  "upstream_path": "vendor/pixel-to-action",
+  "jev_model": "jev-1.14.0",
+  "max_jev_calls": 120,
+  "jev_hz": 3,
+  "max_decision_age_ms": 250,
+  "vlm_base_url": "",
+  "vlm_model": "",
+  "review_interval_s": 10,
+  "death_templates": {},
+  "max_vlm_calls": 12,
+  "vlm_timeout_s": 30
+}

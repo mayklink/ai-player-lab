@@ -1,0 +1,31 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.env
+vendor/
+runs/
+models/
+configs/local.json
+data/game_profiles/
+
+# Secrets, generated output and local tooling
+.env.*
+!.env.example
+artifacts/
+build/
+dist/
+.coverage*
+htmlcov/
+.ruff_cache/
+*.log
+*.sqlite*
+*.db
+*.pem
+*.key
+.vscode/
+.idea/
+# Game imagery is supplied locally, never redistributed.
+src/ai_player_lab/profiles/mario/
+tests/fixtures/

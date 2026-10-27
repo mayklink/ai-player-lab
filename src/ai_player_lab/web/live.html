@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>AI Player Mario · Visão ao vivo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #101114;
+      color: #f4f4f5;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      --muted: #a1a1aa;
+      --line: #2b2d33;
+      --panel: #18191e;
+      --accent: #7dd3fc;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; }
+    button { font: inherit; }
+    .shell { width: min(1480px, 100%); margin: 0 auto; padding: 22px 24px 28px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
+    .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(1.55rem, 4vw, 2.2rem); letter-spacing: -.04em; }
+    .subtitle { margin: 9px 0 0; color: var(--muted); font-size: .94rem; }
+    .live-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; color: #d4d4d8; font-size: .78rem; white-space: nowrap; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #71717a; }
+    .live-badge[data-live="true"] .live-dot { background: #4ade80; box-shadow: 0 0 12px #4ade8066; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(310px, 360px); gap: 14px; align-items: start; }
+    .panel { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+    .screen-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); color: #d4d4d8; font-size: .82rem; }
+    .screen-head span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .screen { position: relative; display: grid; place-items: center; min-height: 250px; aspect-ratio: 256 / 224; overflow: hidden; background: #08090b; }
+    .screen canvas { display: none; width: auto; height: auto; max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+    .screen canvas[data-ready="true"] { display: block; }
+    .placeholder { max-width: 28rem; padding: 24px; color: #a1a1aa; text-align: center; line-height: 1.55; }
+    .placeholder strong { display: block; margin-bottom: 5px; color: #e4e4e7; font-weight: 600; }
+    .screen canvas#gameFrame[data-ready="true"] ~ .placeholder { display: none; }
+    .below-screen { display: flex; justify-content: space-between; gap: 14px; padding: 11px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: .78rem; }
+    .image-scale { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .image-scale input { width: clamp(88px, 11vw, 150px); margin: 0; accent-color: #7dd3fc; cursor: pointer; }
+    .image-scale output { min-width: 3ch; color: #e4e4e7; text-align: right; font-variant-numeric: tabular-nums; }
+    .view-options { display: grid; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: .76rem; }
+    .overlay-toggle { display: inline-flex; align-items: center; gap: 8px; width: fit-content; color: #e4e4e7; cursor: pointer; }
+    .overlay-toggle input { width: 16px; height: 16px; margin: 0; accent-color: #7dd3fc; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 7px; }
+    .legend-swatch { width: 10px; height: 10px; border-radius: 2px; }
+    .legend-swatch.mario { background: #4ade80; }
+    .legend-swatch.rex { background: #4ade80; }
+    .legend-swatch.projectile { background: #4ade80; }
+    .legend-swatch.moving { background: #facc15; }
+    .legend-swatch.prediction { border: 1px dashed #a1a1aa; background: transparent; }
+    .side { display: grid; gap: 14px; }
+    .section { padding: 16px; }
+    h2 { margin: 0 0 14px; color: #d4d4d8; font-size: .77rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .owner { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+    .owner-mark { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid #3f4851; border-radius: 10px; background: #202a32; color: var(--accent); font-size: .83rem; font-weight: 700; }
+    .owner-label { color: var(--muted); font-size: .74rem; }
+    .owner-name { margin-top: 2px; font-size: .95rem; font-weight: 650; }
+    dl { margin: 0; }
+    .row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid #282a30; font-size: .82rem; }
+    .row dt { color: var(--muted); }
+    .row dd { margin: 0; max-width: 62%; color: #e4e4e7; text-align: right; overflow-wrap: anywhere; }
+    .summary { margin: 13px 0 0; color: #d4d4d8; font-size: .86rem; line-height: 1.55; }
+    .learning { margin-top: 12px; padding: 11px; border: 1px solid #282a30; border-radius: 8px; background: #141519; }
+    .learning h3 { margin: 0 0 8px; color: #d4d4d8; font-size: .75rem; font-weight: 650; }
+    .learning-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+    .learning-item { display: grid; gap: 2px; min-width: 0; }
+    .learning-item dt { color: var(--muted); font-size: .7rem; line-height: 1.35; }
+    .learning-item dd { margin: 0; color: #e4e4e7; font-size: .8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .learning-note { margin: 8px 0 0; color: var(--muted); font-size: .7rem; line-height: 1.4; }
+    .actions { display: grid; gap: 9px; }
+    .actions h2 { margin-bottom: 2px; }
+    .button { min-height: 42px; padding: 9px 12px; border: 1px solid #41434b; border-radius: 9px; background: #25262c; color: #f4f4f5; cursor: pointer; font-size: .86rem; font-weight: 600; transition: background .15s, border-color .15s, opacity .15s; }
+    .button:hover:not(:disabled) { border-color: #666a75; background: #303139; }
+    .button:focus-visible { outline: 3px solid #7dd3fc; outline-offset: 2px; }
+    .button.primary { border-color: #0284c7; background: #0369a1; }
+    .button.primary:hover:not(:disabled) { background: #075985; }
+    .button.danger { color: #fecaca; border-color: #65383b; background: #2d1d20; }
+    .button:disabled { cursor: not-allowed; opacity: .48; }
+    .screen-tools { display: inline-flex; align-items: center; gap: 8px; }
+    .expand-button { min-height: 32px; padding: 5px 9px; border: 1px solid #41434b; border-radius: 7px; background: #25262c; color: #f4f4f5; cursor: pointer; font-size: .75rem; font-weight: 600; }
+    .expand-button:hover { border-color: #666a75; background: #303139; }
+    .expand-button:focus-visible { outline: 3px solid #7dd3fc; outline-offset: 2px; }
+    .settings { margin: 2px 0 10px; border: 1px solid #34363e; border-radius: 8px; }
+    .settings summary { padding: 9px 10px; color: #d4d4d8; cursor: pointer; font-size: .78rem; font-weight: 600; }
+    .settings[open] { padding: 0 10px 8px; }
+    .control-note, .error { margin: 3px 0 0; color: var(--muted); font-size: .76rem; line-height: 1.5; }
+    .error { color: #fca5a5; }
+    .field { display: grid; gap: 6px; margin-bottom: 10px; }
+    .field label { color: #d4d4d8; font-size: .78rem; font-weight: 600; }
+    .field input, .field textarea { width: 100%; min-height: 40px; padding: 9px 10px; border: 1px solid #41434b; border-radius: 8px; background: #101114; color: #f4f4f5; font: inherit; font-size: .81rem; }
+    .field textarea { min-height: 70px; resize: vertical; line-height: 1.45; }
+    .field input:focus-visible, .field textarea:focus-visible { outline: 3px solid #7dd3fc; outline-offset: 2px; }
+    .field input:disabled, .field textarea:disabled { opacity: .62; }
+    .profile-note { margin: -2px 0 10px; color: var(--muted); font-size: .74rem; line-height: 1.45; }
+    .goal-progress { margin: 0; color: #d4d4d8; font-size: .85rem; line-height: 1.55; }
+    @media (min-width: 761px) and (min-height: 680px) {
+      body { height: 100vh; height: 100dvh; overflow: hidden; }
+      .shell { height: 100%; display: flex; flex-direction: column; padding: 12px 18px 14px; }
+      header { flex: none; margin-bottom: 10px; }
+      .eyebrow { margin-bottom: 3px; font-size: .66rem; }
+      h1 { font-size: 1.45rem; }
+      .subtitle { margin-top: 3px; font-size: .78rem; }
+      .layout { flex: 1; min-height: 0; align-items: stretch; }
+      .screen-panel { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
+      .screen { min-height: 0; aspect-ratio: auto; }
+      .below-screen { padding: 7px 11px; }
+      .view-options { gap: 5px; padding: 7px 11px; font-size: .68rem; }
+      .legend { gap: 5px 11px; }
+      .side { min-height: 0; grid-template-rows: auto auto 1fr; gap: 8px; }
+      .section { padding: 10px 12px; }
+      h2 { margin-bottom: 7px; font-size: .7rem; }
+      .owner { gap: 8px; margin-bottom: 6px; }
+      .owner-mark { width: 28px; height: 28px; border-radius: 8px; }
+      .owner-label { font-size: .67rem; }
+      .owner-name { font-size: .82rem; }
+      .state-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
+      .row { gap: 6px; padding: 4px 0; font-size: .71rem; }
+      .row dd { max-width: 58%; }
+      .summary { margin: 7px 0 0; font-size: .74rem; line-height: 1.35; }
+      #summary { display: none; }
+      .learning { margin-top: 7px; padding: 7px; }
+      .learning h3 { margin-bottom: 5px; font-size: .7rem; }
+      .learning-grid { gap: 5px 9px; }
+      .learning-item dt, .learning-note { font-size: .64rem; }
+      .learning-item dd { font-size: .72rem; }
+      .learning-note { margin-top: 5px; }
+      .learning-note { display: none; }
+      .goal-progress { font-size: .75rem; line-height: 1.35; }
+      .section[aria-labelledby="goalTitle"] dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
+      .actions { gap: 6px; }
+      .actions h2 { margin-bottom: 0; }
+      .actions form { display: grid; gap: 6px; }
+      .settings { margin: 0; }
+      .settings summary { padding: 7px 9px; }
+      .settings[open] { max-height: 34vh; overflow: auto; }
+      .button { min-height: 34px; padding: 6px 9px; font-size: .78rem; }
+      .control-note, .error { font-size: .68rem; line-height: 1.35; }
+      .profile-note { font-size: .68rem; }
+      .field { gap: 4px; margin-bottom: 7px; }
+      .field label { font-size: .7rem; }
+      .field input, .field textarea { min-height: 34px; padding: 6px 8px; font-size: .74rem; }
+      .field textarea { min-height: 54px; }
+      body[data-game-expanded="true"] { overflow: hidden; }
+      body[data-game-expanded="true"] .shell > header,
+      body[data-game-expanded="true"] .side,
+      body[data-game-expanded="true"] .below-screen,
+      body[data-game-expanded="true"] .view-options { display: none; }
+      body[data-game-expanded="true"] .shell { width: 100%; padding: 10px; }
+      body[data-game-expanded="true"] .layout { display: block; }
+      body[data-game-expanded="true"] .screen-panel { position: fixed; z-index: 10; inset: 10px; grid-template-rows: auto minmax(0, 1fr); box-shadow: 0 12px 50px #000b; }
+      body[data-game-expanded="true"] .screen { min-height: 0; }
+    }
+    @media (max-width: 760px) {
+      .shell { padding: 24px 16px 36px; }
+      header { flex-direction: column; gap: 14px; }
+      .layout { grid-template-columns: 1fr; }
+      .screen { min-height: 180px; }
+      .side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .actions { grid-column: 1 / -1; }
+      body[data-game-expanded="true"] { overflow: hidden; }
+      body[data-game-expanded="true"] .shell > header,
+      body[data-game-expanded="true"] .side,
+      body[data-game-expanded="true"] .below-screen,
+      body[data-game-expanded="true"] .view-options { display: none; }
+      body[data-game-expanded="true"] .shell { width: 100%; height: 100vh; height: 100dvh; padding: 8px; }
+      body[data-game-expanded="true"] .layout { display: block; }
+      body[data-game-expanded="true"] .screen-panel { position: fixed; z-index: 10; inset: 8px; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+      body[data-game-expanded="true"] .screen { min-height: 0; aspect-ratio: auto; }
+    }
+    @media (max-width: 440px) { .side { grid-template-columns: 1fr; } .actions { grid-column: auto; } .below-screen { flex-direction: column; gap: 4px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">AI Player Mario</p>
+        <h1>Visão ao vivo</h1>
+        <p class="subtitle">Transmissão ao vivo do jogo · captura por navegador</p>
+      </div>
+      <div class="live-badge" id="liveBadge" data-live="false" role="status" aria-live="polite">
+        <span class="live-dot" aria-hidden="true"></span><span id="connectionLabel">Conectando</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="panel screen-panel" aria-label="Tela do jogo">
+        <div class="screen-head"><span>Captura do jogo</span><span class="screen-tools"><span id="frameRate" title="A exibição conta quadros únicos desenhados no canvas; o navegador não confirma que cada um chegou à tela física.">— fps</span><button class="expand-button" id="expandGame" type="button" aria-pressed="false" aria-label="Ampliar tela do jogo">Ampliar jogo</button></span></div>
+        <div class="screen">
+          <canvas id="gameFrame" role="img" aria-label="Quadro atual do jogo Mario capturado pelo navegador"></canvas>
+          <div class="placeholder" id="framePlaceholder" role="status" aria-live="polite">
+            <strong>Aguardando imagem do jogo</strong>
+            A captura aparecerá aqui assim que o navegador enviar o primeiro quadro.
+          </div>
+        </div>
+        <div class="below-screen">
+          <span id="frameState">Aguardando captura</span>
+          <label class="image-scale" for="imageScale">Tamanho da imagem
+            <input id="imageScale" type="range" min="25" max="100" step="5" value="100" aria-label="Tamanho da imagem do jogo" title="Ajusta a imagem dentro da área, sem cortar o quadro">
+            <output id="imageScaleValue" for="imageScale">100%</output>
+          </label>
+        </div>
+        <div class="view-options">
+          <label class="overlay-toggle" for="showDetections"><input id="showDetections" type="checkbox" checked>Mostrar detecções</label>
+          <div class="legend" aria-label="Legenda das detecções">
+            <span class="legend-item"><span class="legend-swatch mario" aria-hidden="true"></span>Mario</span>
+            <span class="legend-item"><span class="legend-swatch rex" aria-hidden="true"></span>Rex</span>
+            <span class="legend-item"><span class="legend-swatch projectile" aria-hidden="true"></span>Projétil grande</span>
+            <span class="legend-item"><span class="legend-swatch moving" aria-hidden="true"></span>Movimento independente</span>
+            <span class="legend-item"><span class="legend-swatch prediction" aria-hidden="true"></span>Previsão</span>
+          </div>
+          <span>Mario, Rex e projétil reconhecidos por aparência. Amarelo: movimento independente, sem classe. Tracejado: previsão sem autorizar reação.</span>
+        </div>
+      </section>
+
+      <aside class="side" aria-label="Estado e controles">
+        <section class="panel section" aria-labelledby="stateTitle">
+          <h2 id="stateTitle">Estado da sessão</h2>
+          <div class="owner"><div class="owner-mark" id="ownerMark" aria-hidden="true">—</div><div><div class="owner-label">Controle atual</div><div class="owner-name" id="owner">—</div></div></div>
+          <dl class="state-grid">
+            <div class="row"><dt>Execução</dt><dd id="runState">Desconhecida</dd></div>
+            <div class="row"><dt>Cena</dt><dd id="scene">—</dd></div>
+            <div class="row"><dt>Chamadas Jev</dt><dd id="jevCalls">—</dd></div>
+            <div class="row"><dt>Chamadas Luna</dt><dd id="lunaCalls">—</dd></div>
+            <div class="row"><dt>Última ação</dt><dd id="lastAction">—</dd></div>
+            <div class="row"><dt>Último efeito</dt><dd id="lastEffect">—</dd></div>
+            <div class="row"><dt>Fase do salto</dt><dd id="jumpPhase">Não confirmado</dd></div>
+            <div class="row"><dt>No chão</dt><dd id="grounded">Não confirmado</dd></div>
+            <div class="row"><dt>Pode iniciar salto</dt><dd id="canStartJump">Não confirmado</dd></div>
+            <div class="row"><dt>Prazo do salto</dt><dd id="jumpDeadline">Não confirmado</dd></div>
+            <div class="row"><dt>Origem do prazo</dt><dd id="deadlineSource">Não confirmado</dd></div>
+          </dl>
+          <p class="summary" id="summary">Aguardando estado da sessão.</p>
+          <section class="learning" aria-labelledby="learningTitle">
+            <h3 id="learningTitle">Aprendizado nesta sessão</h3>
+            <dl class="learning-grid">
+              <div class="learning-item"><dt>Mortes confirmadas</dt><dd id="learningDeaths">—</dd></div>
+              <div class="learning-item"><dt>Passagens observadas</dt><dd id="learningPassages">—</dd></div>
+              <div class="learning-item"><dt>Correções executadas</dt><dd id="learningRetries">—</dd></div>
+              <div class="learning-item"><dt>Decisões com memória</dt><dd id="learningMemoryDecisions">—</dd></div>
+            </dl>
+            <p class="learning-note">— indica dado não informado. Hipóteses não verificadas não são regras de ação.</p>
+          </section>
+        </section>
+
+        <section class="panel section" aria-labelledby="goalTitle">
+          <h2 id="goalTitle">Objetivo da sessão</h2>
+          <p class="goal-progress" id="goalProgress" role="status" aria-live="polite">Aguardando objetivo da sessão.</p>
+          <dl>
+            <div class="row"><dt>Etapa atual</dt><dd id="currentStage">—</dd></div>
+            <div class="row"><dt>Etapa alvo</dt><dd id="targetStage">—</dd></div>
+            <div class="row"><dt>Modo</dt><dd id="goalMode">—</dd></div>
+            <div class="row"><dt>Evidência</dt><dd id="goalEvidence">—</dd></div>
+          </dl>
+        </section>
+
+        <section class="panel section actions" aria-labelledby="controlsTitle">
+          <h2 id="controlsTitle">Controles</h2>
+          <form id="controlForm">
+            <details class="settings">
+              <summary>Configurações do jogo e objetivo</summary>
+            <div class="field">
+              <label for="gameId">Perfil do jogo (identificador)</label>
+              <input id="gameId" name="game_id" type="text" value="super-mario-world" pattern="[a-z0-9][a-z0-9_-]{0,63}" maxlength="64" autocomplete="off" required>
+            </div>
+            <div class="field">
+              <label for="gameName">Nome do jogo</label>
+              <input id="gameName" name="game_name" type="text" value="Super Mario World" maxlength="120" autocomplete="off">
+            </div>
+            <p class="profile-note">O perfil guarda regras e aprendizado por jogo, independentemente do endereço e do objetivo desta sessão.</p>
+            <div class="field">
+              <label for="gameUrl">Endereço do jogo</label>
+              <input id="gameUrl" name="url" type="url" value="https://www.smbgames.be/super-mario-for-snes.php" autocomplete="url" required>
+            </div>
+            <div class="field">
+              <label for="objective">Objetivo</label>
+              <textarea id="objective" name="objective" rows="3">Jogue Super Mario World e chegue à fase 3</textarea>
+            </div>
+            <div class="field">
+              <label for="gameRules">Como jogar</label>
+              <textarea id="gameRules" name="rules" rows="6">Você controla Mario. Avance para a direita quando o caminho estiver livre. Pule enquanto avança para evitar obstáculos ou objetos que se aproximam. Não fique parado só porque não vê inimigos. Pare se o personagem não estiver localizado ou se a tela não for uma fase. No mapa, siga o caminho até a próxima fase.</textarea>
+              <p class="control-note">Estas regras orientam o Jev durante a partida.</p>
+            </div>
+            </details>
+            <button class="button primary" id="startButton" type="submit">Iniciar / retomar</button>
+          </form>
+          <button class="button" id="pauseButton" type="button">Pausar</button>
+          <button class="button danger" id="stopButton" type="button">Encerrar</button>
+          <p class="control-note">Os controles atuam na sessão do jogo neste computador.</p>
+          <p class="error" id="controlError" role="alert" hidden></p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const frame = $('gameFrame');
+      const screen = document.querySelector('.screen');
+      const imageScale = $('imageScale');
+      const imageScaleValue = $('imageScaleValue');
+      const expandGameButton = $('expandGame');
+      const frameState = $('frameState');
+      const placeholder = $('framePlaceholder');
+      const liveBadge = $('liveBadge');
+      let statusBusy = false;
+      let controlBusy = false;
+      let statusTimer;
+      let frameFailures = 0;
+      let captureFps;
+      let displayedFrameId = 0;
+      let streamController = null;
+      let streamRunning = false;
+      let streamEnabled = true;
+      let streamGeneration = 0;
+      let displayedSequence = 0;
+      const frameContext = frame.getContext('2d', { alpha: false });
+      const cadenceTimes = [];
+      let gameUrlPristine = true;
+      let gameIdPristine = true;
+      let gameNamePristine = true;
+      let selectedGameId = $('gameId').value;
+      let objectivePristine = true;
+      let gameRulesPristine = true;
+
+      try {
+        const savedScale = Number(localStorage.getItem('ai-player-mario-image-scale'));
+        if (Number.isFinite(savedScale) && savedScale >= 25 && savedScale <= 100) imageScale.value = String(savedScale);
+      } catch {}
+
+      function resizeGameFrame() {
+        if (!frame.width || !frame.height) return;
+        const bounds = screen.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) return;
+        const fit = Math.min(bounds.width / frame.width, bounds.height / frame.height);
+        const scale = fit * Number(imageScale.value) / 100;
+        frame.style.width = `${Math.max(1, Math.floor(frame.width * scale))}px`;
+        frame.style.height = `${Math.max(1, Math.floor(frame.height * scale))}px`;
+        imageScaleValue.value = `${imageScale.value}%`;
+      }
+
+      new ResizeObserver(resizeGameFrame).observe(screen);
+      imageScale.addEventListener('input', () => {
+        imageScaleValue.value = `${imageScale.value}%`;
+        resizeGameFrame();
+        try { localStorage.setItem('ai-player-mario-image-scale', imageScale.value); } catch {}
+      });
+
+      function setGameExpanded(expanded) {
+        document.body.dataset.gameExpanded = expanded ? 'true' : 'false';
+        expandGameButton.setAttribute('aria-pressed', String(expanded));
+        expandGameButton.setAttribute('aria-label', expanded ? 'Restaurar painel completo' : 'Ampliar tela do jogo');
+        expandGameButton.textContent = expanded ? 'Voltar ao painel' : 'Ampliar jogo';
+        requestAnimationFrame(resizeGameFrame);
+      }
+
+      function setPlaceholder(title, detail) {
+        placeholder.querySelector('strong').textContent = title;
+        placeholder.lastChild.textContent = detail;
+      }
+
+      function updateStatus(status) {
+        const running = Boolean(status.running);
+        const paused = Boolean(status.paused);
+        const goal = status.goal && typeof status.goal === 'object' ? status.goal : null;
+        const gameProfile = status.game_profile && typeof status.game_profile === 'object' ? status.game_profile : null;
+        const stopped = status.stopped === true || status.lifecycle === 'stopped';
+        if (gameUrlPristine) {
+          const reportedUrl = status.url || status.game_url || goal?.url;
+          if (typeof reportedUrl === 'string' && reportedUrl) $('gameUrl').value = reportedUrl;
+        }
+        if (objectivePristine && typeof goal?.description === 'string' && goal.description) $('objective').value = goal.description;
+        if (gameIdPristine && typeof gameProfile?.game_id === 'string' && gameProfile.game_id) {
+          $('gameId').value = gameProfile.game_id;
+          selectedGameId = gameProfile.game_id;
+        }
+        if (gameNamePristine && typeof gameProfile?.name === 'string' && gameProfile.name) $('gameName').value = gameProfile.name;
+        if (gameRulesPristine && typeof gameProfile?.rules === 'string') $('gameRules').value = gameProfile.rules;
+        else if (gameRulesPristine && typeof status.rules === 'string') $('gameRules').value = status.rules;
+        renderCharacterState(status.character_state);
+        $('owner').textContent = status.owner || '—';
+        $('ownerMark').textContent = status.owner === 'Jev' ? 'J' : status.owner === 'Luna' ? 'L' : status.owner === 'Visão local' ? 'V' : '—';
+        $('scene').textContent = sceneLabel(status.scene);
+        $('summary').textContent = status.summary || 'Sem resumo disponível.';
+        $('runState').textContent = stopped ? 'Encerrado' : paused ? 'Pausado' : running ? 'Em execução' : 'Aguardando início';
+        $('jevCalls').textContent = Number.isFinite(status.calls?.jev) ? String(status.calls.jev) : '—';
+        $('lunaCalls').textContent = Number.isFinite(status.calls?.luna) ? String(status.calls.luna) : '—';
+        $('lastAction').textContent = status.last_action || '—';
+        $('lastEffect').textContent = status.last_effect || '—';
+        renderLearning(status.learning);
+        captureFps = Number.isFinite(status.capture_fps) ? status.capture_fps : undefined;
+        updateFrameRate();
+        $('gameUrl').disabled = controlBusy || running;
+        $('gameId').disabled = controlBusy || running;
+        $('gameName').disabled = controlBusy || running;
+        $('objective').disabled = controlBusy || running;
+        $('gameRules').disabled = controlBusy || running;
+        $('startButton').disabled = controlBusy || (running && !paused);
+        $('pauseButton').disabled = controlBusy || !running || paused;
+        $('stopButton').disabled = controlBusy || !running;
+        renderGoal(goal);
+        liveBadge.dataset.live = String(running && !paused);
+        $('connectionLabel').textContent = stopped ? 'Sessão encerrada' : running && !paused ? 'Ao vivo' : paused ? 'Pausado' : 'Aguardando início';
+        if (stopped) {
+          frameState.textContent = 'Sessão encerrada';
+        }
+        if (stopped && !frame.dataset.ready) {
+          frameState.textContent = 'Sessão encerrada';
+          setPlaceholder('Sessão encerrada', 'A sessão foi encerrada. Inicie uma nova sessão para receber os quadros do jogo.');
+        } else if (!running && !frame.dataset.ready) {
+          frameState.textContent = paused ? 'Captura pausada' : 'Aguardando início';
+          setPlaceholder(paused ? 'Sessão pausada' : 'Aguardando início', paused ? 'Retome a sessão para continuar recebendo os quadros.' : 'Inicie a sessão para receber os quadros do jogo.');
+        } else if (paused && !frame.dataset.ready) {
+          frameState.textContent = 'Captura pausada';
+          setPlaceholder('Sessão pausada', 'Retome a sessão para continuar recebendo os quadros.');
+        }
+      }
+
+      function renderLearning(learning) {
+        const metrics = learning && typeof learning === 'object' ? learning : {};
+        const count = (value) => Number.isSafeInteger(value) && value >= 0 ? String(value) : '—';
+        $('learningDeaths').textContent = count(metrics.deaths_confirmed_local);
+        $('learningPassages').textContent = count(metrics.successful_passages);
+        $('learningRetries').textContent = count(metrics.retry_actions_executed);
+        $('learningMemoryDecisions').textContent = count(metrics.memory_policy_requests);
+      }
+
+      function renderCharacterState(characterState) {
+        const state = characterState && typeof characterState === 'object' ? characterState : {};
+        const confirmed = (value) => value == null || value === '' ? 'Não confirmado' : String(value);
+        const booleanLabel = (value) => value === true ? 'Sim' : value === false ? 'Não' : 'Não confirmado';
+        $('jumpPhase').textContent = confirmed(state.jump_phase);
+        $('grounded').textContent = booleanLabel(state.grounded);
+        $('canStartJump').textContent = booleanLabel(state.can_start_jump);
+        $('jumpDeadline').textContent = confirmed(state.jump_deadline_ms);
+        $('deadlineSource').textContent = confirmed(state.deadline_source);
+      }
+
+      function updateFrameRate() {
+        const parts = [];
+        if (Number.isFinite(captureFps)) parts.push(`captura ${captureFps.toFixed(1)} fps`);
+        if (cadenceTimes.length > 1) {
+          const elapsed = cadenceTimes[cadenceTimes.length - 1] - cadenceTimes[0];
+          if (elapsed > 0) parts.push(`exibição ${(((cadenceTimes.length - 1) / elapsed) * 1000).toFixed(1)} fps`);
+          else parts.push('exibição —');
+        } else {
+          parts.push('exibição —');
+        }
+        $('frameRate').textContent = parts.join(' · ');
+      }
+
+      function renderGoal(goal) {
+        if (!goal) {
+          $('goalProgress').textContent = 'Objetivo ainda não informado pelo servidor.';
+          $('currentStage').textContent = 'Desconhecida';
+          $('targetStage').textContent = '—';
+          $('goalMode').textContent = '—';
+          $('goalEvidence').textContent = '—';
+          return;
+        }
+        const stateLabels = {
+          running: 'Em andamento',
+          in_progress: 'Em andamento',
+          pending: 'Aguardando início',
+          completed: goal.completed === true ? 'Concluído' : 'Em andamento'
+        };
+        const rawStatus = typeof goal.status === 'string' ? goal.status.toLowerCase() : '';
+        const status = goal.completed === true ? 'Concluído' : (stateLabels[rawStatus] || 'Reconhecendo progresso');
+        const description = typeof goal.description === 'string' && goal.description.trim() ? goal.description.trim() : 'Objetivo não informado';
+        $('goalProgress').textContent = `${description} · ${status}`;
+        const currentStage = goal.current_stage ?? findObservedStage(goal.evidence);
+        $('currentStage').textContent = currentStage == null || currentStage === '' ? 'Desconhecida' : String(currentStage);
+        $('targetStage').textContent = goal.target_stage == null || goal.target_stage === '' ? '—' : String(goal.target_stage);
+        const modes = {
+          reach: 'Chegar à fase',
+          complete: 'Concluir a fase',
+          win: 'Vencer o jogo',
+          custom: 'Objetivo personalizado'
+        };
+        const rawMode = typeof goal.mode === 'string' ? goal.mode.toLowerCase() : '';
+        $('goalMode').textContent = modes[rawMode] || 'Objetivo personalizado';
+        $('goalEvidence').textContent = hasObservations(goal.evidence) && currentStage != null && currentStage !== ''
+          ? `Fase ${currentStage} identificada pela visão local`
+          : '—';
+      }
+
+      function sceneLabel(scene) {
+        const labels = {
+          title: 'Título',
+          file_menu: 'Escolha de partida',
+          player_menu: 'Jogadores',
+          intro: 'Introdução',
+          map: 'Mapa',
+          hub: 'Casa do Yoshi',
+          gameplay: 'Fase em jogo',
+          loading: 'Carregando',
+          unknown: 'Reconhecendo tela',
+          death: 'Morte'
+        };
+        return typeof scene === 'string' ? (labels[scene.toLowerCase()] || 'Reconhecendo tela') : 'Reconhecendo tela';
+      }
+
+      function hasObservations(value, depth = 0) {
+        if (!value || typeof value !== 'object' || depth > 3) return false;
+        if (Object.prototype.hasOwnProperty.call(value, 'observations') || Object.prototype.hasOwnProperty.call(value, 'observation')) return true;
+        return Object.values(value).some((item) => hasObservations(item, depth + 1));
+      }
+
+      function findObservedStage(value, depth = 0) {
+        if (!value || typeof value !== 'object' || depth > 3) return null;
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            const stage = findObservedStage(item, depth + 1);
+            if (stage != null) return stage;
+          }
+          return null;
+        }
+        for (const [key, item] of Object.entries(value)) {
+          const normalizedKey = key.toLowerCase().replace(/[-\s]/g, '_');
+          if (/^(current_)?(stage|fase|level|etapa|nivel)$/.test(normalizedKey) && (typeof item === 'string' || typeof item === 'number')) return item;
+        }
+        for (const item of Object.values(value)) {
+          const stage = findObservedStage(item, depth + 1);
+          if (stage != null) return stage;
+        }
+        return null;
+      }
+
+      async function fetchStatus() {
+        if (statusBusy) return;
+        statusBusy = true;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        try {
+          const response = await fetch('/status', { cache: 'no-store', signal: controller.signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          updateStatus(await response.json());
+          if ($('controlError').textContent.startsWith('Não foi possível consultar o estado do servidor:')) {
+            $('controlError').hidden = true;
+            $('controlError').textContent = '';
+          }
+        } catch (error) {
+          console.error('[live] status refresh failed', error);
+          $('connectionLabel').textContent = 'Sem conexão';
+          liveBadge.dataset.live = 'false';
+          $('runState').textContent = 'Indisponível';
+          const reason = error?.name === 'AbortError' ? 'tempo esgotado após 3 s' : (error?.message || String(error));
+          $('controlError').textContent = `Não foi possível consultar o estado do servidor: ${reason}`;
+          $('controlError').hidden = false;
+        } finally {
+          clearTimeout(timeout);
+          statusBusy = false;
+        }
+      }
+
+      function commitFrame(bitmap, frameId, frameAgeMs, receivedAt, annotated, generation, controller) {
+        if (!streamRunning || generation !== streamGeneration || controller !== streamController ||
+            frameId <= displayedFrameId) { bitmap.close(); return; }
+        frame.width = bitmap.width;
+        frame.height = bitmap.height;
+        frameContext.drawImage(bitmap, 0, 0);
+        resizeGameFrame();
+        bitmap.close();
+        const drawnAt = performance.now();
+        displayedFrameId = frameId;
+        displayedSequence++;
+        cadenceTimes.push(drawnAt);
+        if (cadenceTimes.length > 60) cadenceTimes.shift();
+        frame.dataset.ready = 'true';
+        const ageAtDraw = Number.isFinite(frameAgeMs) ? Math.max(0, frameAgeMs + drawnAt - receivedAt) : null;
+        const ageText = ageAtDraw === null ? '' : ` · atraso ${Math.round(ageAtDraw)} ms`;
+        frameState.textContent = `${annotated ? 'Anotado' : 'Bruto'} · quadro ${frameId} · exibição ${displayedSequence}${ageText}`;
+        setPlaceholder('', '');
+        updateFrameRate();
+      }
+
+      function restartFrameStream() {
+        streamGeneration++;
+        displayedFrameId = 0;
+        displayedSequence = 0;
+        cadenceTimes.length = 0;
+        updateFrameRate();
+        frameState.textContent = $('showDetections').checked ? 'Aguardando quadro anotado…' : 'Aguardando quadro bruto…';
+        streamController?.abort();
+        if (!streamController) startFrameStream();
+      }
+
+      function startFrameStream() {
+        if (streamRunning) return;
+        streamRunning = true;
+        const generation = streamGeneration;
+        const controller = new AbortController();
+        streamController = controller;
+        void fetchFrame(generation, controller);
+      }
+
+      async function fetchFrame(generation, controller) {
+        const annotated = $('showDetections').checked;
+        let after = 0;
+        try {
+          while (streamEnabled && streamRunning && generation === streamGeneration && controller === streamController) {
+            try {
+              const mode = annotated ? 'annotated=1&' : '';
+              const response = await fetch(`/frame.jpg?${mode}after=${encodeURIComponent(after)}`, {
+                cache: 'no-store', signal: controller.signal
+              });
+              if (response.status === 204 || response.status === 503) continue;
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const receivedAt = performance.now();
+              const frameId = Number(response.headers.get('X-Frame-ID'));
+              if (!Number.isSafeInteger(frameId) || frameId <= after) throw new Error('Quadro sem sequência válida');
+              const bitmap = await createImageBitmap(await response.blob());
+              after = frameId;
+              const rawAge = Number(response.headers.get('X-Frame-Age-Ms'));
+              const frameAgeMs = Number.isFinite(rawAge) ? rawAge : null;
+              frameFailures = 0;
+              // Draw immediately after decode so a throttled rAF cannot stall the
+              // long-poll loop. The next request starts only after this commit.
+              commitFrame(bitmap, frameId, frameAgeMs, receivedAt,
+                annotated, generation, controller);
+            } catch (error) {
+              if (error?.name === 'AbortError') break;
+              frameFailures++;
+              console.error('[live] frame stream failed', error);
+              if (!frame.dataset.ready) {
+                frameState.textContent = 'Aguardando captura';
+                setPlaceholder('Aguardando imagem do jogo', frameFailures > 4
+                  ? 'O servidor ainda não disponibilizou um quadro.'
+                  : 'A captura aparecerá aqui assim que o navegador enviar o primeiro quadro.');
+              }
+              await new Promise((resolve) => setTimeout(resolve, Math.min(250, 25 * frameFailures)));
+            }
+          }
+        } finally {
+          if (controller === streamController) {
+            streamController = null;
+            streamRunning = false;
+            if (streamEnabled && generation !== streamGeneration) startFrameStream();
+          }
+        }
+      }
+
+      async function sendControl(action) {
+        if (controlBusy) return;
+        controlBusy = true;
+        $('controlError').hidden = true;
+        $('controlError').textContent = '';
+        for (const button of [$('startButton'), $('pauseButton'), $('stopButton')]) button.disabled = true;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        try {
+          const response = await fetch('/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(action === 'start'
+              ? { action, game_id: $('gameId').value, game_name: $('gameName').value, url: $('gameUrl').value, objective: $('objective').value, rules: $('gameRules').value }
+              : { action }),
+            cache: 'no-store',
+            signal: controller.signal
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          await fetchStatus();
+        } catch (error) {
+          $('controlError').textContent = 'Não foi possível enviar o controle. Verifique a conexão e tente novamente.';
+          $('controlError').hidden = false;
+        } finally {
+          clearTimeout(timeout);
+          controlBusy = false;
+          fetchStatus();
+        }
+      }
+
+      $('gameUrl').addEventListener('input', () => { gameUrlPristine = false; });
+      $('gameId').addEventListener('input', () => {
+        gameIdPristine = false;
+        if ($('gameId').value !== selectedGameId) {
+          selectedGameId = $('gameId').value;
+          gameNamePristine = false;
+          $('gameName').value = '';
+          gameRulesPristine = false;
+          objectivePristine = false;
+          $('gameRules').value = '';
+          $('objective').value = '';
+        }
+      });
+      $('gameName').addEventListener('input', () => { gameNamePristine = false; });
+      $('objective').addEventListener('input', () => { objectivePristine = false; });
+      $('gameRules').addEventListener('input', () => { gameRulesPristine = false; });
+      $('showDetections').addEventListener('change', () => {
+        restartFrameStream();
+      });
+      expandGameButton.addEventListener('click', () => setGameExpanded(document.body.dataset.gameExpanded !== 'true'));
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && document.body.dataset.gameExpanded === 'true') setGameExpanded(false);
+      });
+      $('controlForm').addEventListener('submit', (event) => {
+        event.preventDefault();
+        if ($('controlForm').reportValidity()) sendControl('start');
+      });
+      $('pauseButton').addEventListener('click', () => sendControl('pause'));
+      $('stopButton').addEventListener('click', () => sendControl('stop'));
+      fetchStatus();
+      startFrameStream();
+      statusTimer = setInterval(fetchStatus, 500);
+      window.addEventListener('pagehide', () => {
+        streamEnabled = false;
+        streamGeneration++;
+        streamRunning = false;
+        streamController?.abort();
+        clearInterval(statusTimer);
+      }, { once: true });
+    })();
+  </script>
+</body>
+</html>
